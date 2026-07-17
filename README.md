@@ -231,7 +231,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## 👤 Author
 
-**CK** — CSE Final Year Student  
+**Chayesh Kumar M L** — CSE Final Year Student  
 *Final Year Project — Cryptojacking Detection using Machine Learning*
 
 ---
