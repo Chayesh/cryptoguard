@@ -1,0 +1,27 @@
+=================================================================
+  CRYPTOJACKING DETECTOR — FALSE POSITIVE STRESS TEST REPORT
+  Generated: 2026-07-08 07:04:06
+=================================================================
+
+Scenario                       Samples  FP Rate  Avg Conf Verdict         
+─────────────────────────────────────────────────────────────────
+1. CPU Stress (4 cores)             10     0.0%     16.3% ✅ PASS          
+2. Memory Stress (1GB)              10     0.0%     26.0% ✅ PASS          
+3. CPU + Memory Combined            10   100.0%     69.0% ⚠️  FALSE POSITIVE
+4. Disk I/O Stress                  10    10.0%      9.2% ⚠️  FALSE POSITIVE
+5. Fork Bomb (many procs)           10     0.0%     14.4% ✅ PASS          
+6. Python Matrix Workload            6     0.0%      5.8% ✅ PASS          
+7. Idle Baseline                    10     0.0%      3.4% ✅ PASS          
+─────────────────────────────────────────────────────────────────
+
+Total scenarios : 7
+Passed (no FP)  : 5
+False Positives : 2
+
+INTERPRETATION:
+  A false positive means the detector wrongly flagged a
+  legitimate workload as cryptojacking. Lower FP rate = better.
+
+  The detector uses memory allocation patterns and process
+  name matching alongside CPU metrics, which helps distinguish
+  XMRig (RandomX, ~2GB RAM) from regular CPU stress tools.

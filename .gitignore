@@ -1,0 +1,45 @@
+# ── Python ──────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+
+# ── ML Models (regenerate with train_model.py) ──
+*.pkl
+*.joblib
+*.h5
+*.model
+
+# ── Datasets (contain personal system data) ──────
+*.csv
+
+# ── Logs ─────────────────────────────────────────
+*.log
+*.log.*
+
+# ── OS ───────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ──────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── XMRig (never push binaries) ──────────────────
+xmrig/
+*.bin
+*.elf
+
+# ── Jupyter ──────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb

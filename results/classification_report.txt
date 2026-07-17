@@ -1,0 +1,41 @@
+=======================================================
+  CRYPTOJACKING DETECTION — MODEL REPORT
+=======================================================
+
+  Accuracy  : 100.00%
+  Precision : 100.00%
+  Recall    : 100.00%
+  F1 Score  : 100.00%
+  ROC AUC   : 1.0000
+
+Classification Report:
+               precision    recall  f1-score   support
+
+       Normal       1.00      1.00      1.00        77
+Cryptojacking       1.00      1.00      1.00       110
+
+     accuracy                           1.00       187
+    macro avg       1.00      1.00      1.00       187
+ weighted avg       1.00      1.00      1.00       187
+
+Feature Importances:
+  memory_percent                      0.1801
+  memory_available_mb                 0.1757
+  miner_process_detected              0.1730
+  top_process_cpu_percent             0.1231
+  cpu_max_core_percent                0.1115
+  cpu_mean_core_percent               0.0958
+  cpu_total_percent                   0.0629
+  high_cpu_process_count              0.0529
+  cpu_core_std                        0.0081
+  swap_percent                        0.0061
+  cpu_spike_duration_sec              0.0041
+  cpu_spike_count                     0.0031
+  disk_write_delta                    0.0015
+  process_count                       0.0008
+  net_bytes_recv_delta                0.0006
+  disk_read_delta                     0.0005
+  net_sent_recv_ratio                 0.0001
+  net_bytes_sent_delta                0.0000
+  mining_pool_connection              0.0000
+  cpu_core_count                      0.0000
