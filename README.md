@@ -42,10 +42,10 @@ CryptoGuard is a complete end-to-end detection pipeline that:
 ![Threat](screenshots/dashboard_threat(1).png)
 
 ### Feature Importance
-![Features](results/feature_importance.png)
+![Features](screenshots/feature_importance.png)
 
 ### ROC Curve
-![ROC](results/roc_curve.png)
+![ROC](screenshots/roc_curve.png)
 
 ### Key Research Finding
 > Memory-based features (`memory_percent`, `memory_available_mb`) ranked **higher** in importance than CPU features — because XMRig's RandomX algorithm allocates ~2GB RAM. This contradicts most existing literature which focuses primarily on CPU as the detection signal.
