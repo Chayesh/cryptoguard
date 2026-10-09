@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CryptoGuard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+  :root {
+    --bg      : #0d1117;
+    --surface : #161b22;
+    --border  : #21262d;
+    --text    : #e6edf3;
+    --muted   : #8b949e;
+    --safe    : #3fb950;
+    --warn    : #d29922;
+    --threat  : #f85149;
+    --accent  : #58a6ff;
+    --mono    : 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    width: 340px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .logo { font-size: 18px; }
+
+  .title {
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+  }
+
+  .version { color: var(--muted); font-size: 10px; margin-top: 1px; }
+
+  .total-badge {
+    margin-left: auto;
+    background: rgba(248,81,73,0.15);
+    border: 1px solid rgba(248,81,73,0.3);
+    color: var(--threat);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+  }
+
+  /* ── STATUS CARD ── */
+  .status-card {
+    margin: 10px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .status-card.safe    { background: rgba(63,185,80,0.08);  border-color: rgba(63,185,80,0.2); }
+  .status-card.warning { background: rgba(210,153,34,0.08); border-color: rgba(210,153,34,0.2); }
+  .status-card.threat  { background: rgba(248,81,73,0.10);  border-color: rgba(248,81,73,0.3); animation: pulse 1.5s infinite; }
+  .status-card.blocked { background: rgba(139,148,158,0.08); border-color: var(--border); }
+
+  @keyframes pulse {
+    0%, 100% { border-color: rgba(248,81,73,0.3); }
+    50%       { border-color: rgba(248,81,73,0.8); }
+  }
+
+  .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .safe    .status-dot { background: var(--safe);   box-shadow: 0 0 6px var(--safe); }
+  .warning .status-dot { background: var(--warn);   box-shadow: 0 0 6px var(--warn); animation: blink 1s infinite; }
+  .threat  .status-dot { background: var(--threat); box-shadow: 0 0 8px var(--threat); animation: blink 0.6s infinite; }
+  .blocked .status-dot { background: var(--muted); }
+
+  @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.2} }
+
+  .status-info { flex: 1; }
+
+  .status-label {
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+  }
+  .safe    .status-label { color: var(--safe); }
+  .warning .status-label { color: var(--warn); }
+  .threat  .status-label { color: var(--threat); }
+  .blocked .status-label { color: var(--muted); }
+
+  .status-url {
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+  }
+
+  .confidence {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .conf-label { font-size: 9px; color: var(--muted); text-align: center; }
+
+  /* ── DETECTION METHOD ── */
+  .method-row {
+    margin: 0 10px 8px;
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 10px;
+    color: var(--muted);
+    display: none;
+  }
+  .method-row.visible { display: block; }
+  .method-key { color: var(--accent); }
+
+  /* ── ACTION BUTTONS ── */
+  .actions {
+    display: flex;
+    gap: 6px;
+    margin: 0 10px 10px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-block {
+    background: rgba(248,81,73,0.12);
+    border-color: var(--threat);
+    color: var(--threat);
+    display: none;
+  }
+  .btn-block:hover { background: rgba(248,81,73,0.25); color: var(--threat); border-color: var(--threat); }
+  .btn-block.visible { display: block; }
+
+  .btn-unblock {
+    background: rgba(139,148,158,0.12);
+    border-color: var(--muted);
+    color: var(--muted);
+    display: none;
+  }
+  .btn-unblock.visible { display: block; }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0 10px 8px;
+  }
+
+  /* ── ALERTS ── */
+  .section-title {
+    padding: 0 10px 6px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .btn-clear-small {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 9px;
+    cursor: pointer;
+    padding: 1px 4px;
+  }
+  .btn-clear-small:hover { color: var(--threat); }
+
+  .alert-list {
+    max-height: 160px;
+    overflow-y: auto;
+    margin: 0 10px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .alert-list::-webkit-scrollbar { width: 4px; }
+  .alert-list::-webkit-scrollbar-track { background: transparent; }
+  .alert-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .alert-item {
+    padding: 6px 8px;
+    border-radius: 5px;
+    border: 1px solid rgba(248,81,73,0.2);
+    background: rgba(248,81,73,0.06);
+    font-size: 10px;
+  }
+
+  .alert-header { display: flex; justify-content: space-between; margin-bottom: 2px; }
+  .alert-host   { color: var(--threat); font-weight: 600; }
+  .alert-time   { color: var(--muted); }
+  .alert-method { color: var(--muted); font-size: 9px; }
+
+  .no-alerts {
+    text-align: center;
+    color: var(--muted);
+    padding: 16px 0;
+    font-size: 11px;
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    padding: 8px 14px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 9px;
+    display: flex;
+    justify-content: space-between;
+    letter-spacing: 0.05em;
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">🛡️</div>
+  <div>
+    <div class="title">CRYPTOGUARD</div>
+    <div class="version">Browser Miner Detector v1.0</div>
+  </div>
+  <div class="total-badge" id="total-badge">0 detected</div>
+</div>
+
+<!-- STATUS CARD -->
+<div class="status-card safe" id="status-card">
+  <div class="status-dot"></div>
+  <div class="status-info">
+    <div class="status-label" id="status-label">SAFE</div>
+    <div class="status-url" id="status-url">Checking current tab...</div>
+  </div>
+  <div>
+    <div class="confidence" id="confidence">0%</div>
+    <div class="conf-label">THREAT</div>
+  </div>
+</div>
+
+<!-- DETECTION METHOD -->
+<div class="method-row" id="method-row">
+  <span class="method-key">Detected by:</span>
+  <span id="method-text">—</span>
+</div>
+
+<!-- ACTION BUTTONS -->
+<div class="actions">
+  <button class="btn btn-block" id="btn-block" onclick="blockCurrentTab()">
+    ⚡ Block Miner
+  </button>
+  <button class="btn btn-unblock" id="btn-unblock" onclick="unblockCurrentTab()">
+    ✓ Unblock Tab
+  </button>
+  <button class="btn" onclick="openAlertHistory()">
+    📋 History
+  </button>
+</div>
+
+<div class="divider"></div>
+
+<!-- ALERTS -->
+<div class="section-title">
+  Recent Detections
+  <button class="btn-clear-small" onclick="clearAlerts()">Clear all</button>
+</div>
+
+<div class="alert-list" id="alert-list">
+  <div class="no-alerts">No threats detected yet</div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <span>CryptoGuard FYP</span>
+  <span id="scan-status">Scanning...</span>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

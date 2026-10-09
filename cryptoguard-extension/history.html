@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CryptoGuard — Alert History</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #21262d;
+    --text: #e6edf3; --muted: #8b949e; --threat: #f85149;
+    --accent: #58a6ff; --safe: #3fb950;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--mono); padding: 30px; }
+  h1 { color: var(--accent); font-size: 1.3rem; margin-bottom: 6px; }
+  .sub { color: var(--muted); font-size: 0.8rem; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th { text-align: left; padding: 10px 14px; background: var(--surface);
+       border-bottom: 1px solid var(--border); color: var(--muted);
+       letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.72rem; }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: var(--surface); }
+  .host { color: var(--threat); font-weight: 600; }
+  .method { color: var(--muted); }
+  .conf { color: var(--accent); }
+  .empty { text-align: center; padding: 40px; color: var(--muted); }
+  .btn-clear {
+    margin-bottom: 16px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); font-family: var(--mono); font-size: 0.78rem;
+    padding: 6px 14px; border-radius: 5px; cursor: pointer;
+  }
+  .btn-clear:hover { border-color: var(--threat); color: var(--threat); }
+</style>
+</head>
+<body>
+<h1>🛡️ CryptoGuard — Alert History</h1>
+<p class="sub">All cryptojacking detections across browser sessions</p>
+<button class="btn-clear" onclick="clearAll()">Clear All Alerts</button>
+<table>
+  <thead>
+    <tr>
+      <th>Time</th>
+      <th>Host</th>
+      <th>Detection Method</th>
+      <th>Confidence</th>
+      <th>Blocked</th>
+    </tr>
+  </thead>
+  <tbody id="tbody">
+    <tr><td colspan="5" class="empty">Loading...</td></tr>
+  </tbody>
+</table>
+<script>
+async function load() {
+  const result = await chrome.storage.local.get("alerts");
+  const alerts = result.alerts || [];
+  const tbody  = document.getElementById("tbody");
+
+  if (!alerts.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No alerts recorded yet</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = alerts.map(a => {
+    let host = a.url;
+    try { host = new URL(a.url).hostname; } catch {}
+    return `
+      <tr>
+        <td>${a.date} ${a.time}</td>
+        <td class="host">${host}</td>
+        <td class="method">${a.method || '—'}</td>
+        <td class="conf">${a.confidence}%</td>
+        <td>${a.blocked ? '✅ Yes' : '—'}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function clearAll() {
+  await chrome.storage.local.set({ alerts: [], totalDetections: 0 });
+  load();
+}
+
+load();
+</script>
+</body>
+</html>
