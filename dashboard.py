@@ -22,6 +22,17 @@ import pickle
 import numpy as np
 import time
 import threading
+try:
+    from mitre_mapping import map_to_attack, format_attack_summary, get_highest_severity
+    MITRE_AVAILABLE = True
+except ImportError:
+    MITRE_AVAILABLE = False
+
+try:
+    from timeline import register_timeline
+    TIMELINE_AVAILABLE = True
+except ImportError:
+    TIMELINE_AVAILABLE = False
 from collections import deque
 from datetime import datetime
 import os
@@ -30,8 +41,8 @@ import os
 # CONFIG
 # ──────────────────────────────────────────────
 
-MODEL_PATH  = "cryptojacking_model_v2.pkl"
-SCALER_PATH = "scaler_v2.pkl"
+MODEL_PATH      = "cryptojacking_model.pkl"
+SCALER_PATH     = "scaler.pkl"
 SAMPLE_INTERVAL = 2       # seconds
 HISTORY_SIZE    = 60      # data points to show on chart (~2 mins)
 CPU_SPIKE_THRESH = 75
@@ -42,6 +53,7 @@ KNOWN_MINER_NAMES = [
 ]
 
 app = Flask(__name__)
+
 
 # ──────────────────────────────────────────────
 # GLOBAL STATE
@@ -207,7 +219,7 @@ def detection_loop():
             # OR be detectable by process name.
             # If neither condition is met, downgrade THREAT → WARNING.
 
-            NET_VETO_THRESHOLD = 1 * 1024   # 1 KB/s — tighter threshold for VM environment
+            NET_VETO_THRESHOLD = 5 * 1024   # 5 KB/s outbound minimum for real miner
             miner_detected     = features.get("miner_process_detected", 0)
             net_sent           = features.get("net_bytes_sent_delta", 0)
 
@@ -243,10 +255,34 @@ def detection_loop():
 
             # Alert on status change to THREAT
             if new_status == "THREAT" and state["status"] != "THREAT":
+                # MITRE ATT&CK mapping
+                attack_tags = ""
+                attack_detail = ""
+                if MITRE_AVAILABLE:
+                    mapped    = map_to_attack(features, prob * 100)
+                    attack_tags   = format_attack_summary(mapped)
+                    attack_detail = " | ".join([
+                        f"{m['technique']['id']}: {m['technique']['name']}"
+                        for m in mapped[:2]
+                    ])
+                    state["last_attack_map"] = [
+                        {
+                            "id"      : m["technique"]["id"],
+                            "name"    : m["technique"]["name"],
+                            "tactic"  : m["technique"]["tactic"],
+                            "url"     : m["technique"]["url"],
+                            "evidence": m["evidence"],
+                            "score"   : round(m["score"], 1),
+                        }
+                        for m in mapped
+                    ]
+
                 state["alerts"].insert(0, {
-                    "time"    : datetime.now().strftime("%H:%M:%S"),
-                    "message" : f"🚨 Cryptojacking detected! Confidence: {prob*100:.1f}%",
-                    "type"    : "threat"
+                    "time"        : datetime.now().strftime("%H:%M:%S"),
+                    "message"     : f"🚨 Cryptojacking detected! Confidence: {prob*100:.1f}%",
+                    "type"        : "threat",
+                    "attack_tags" : attack_tags,
+                    "attack_detail": attack_detail,
                 })
             elif new_status == "SAFE" and state["status"] == "THREAT":
                 state["alerts"].insert(0, {
@@ -282,6 +318,11 @@ def detection_loop():
 thread = threading.Thread(target=detection_loop, daemon=True)
 thread.start()
 
+# Register timeline routes
+if TIMELINE_AVAILABLE:
+    register_timeline(app, state, history, state["alerts"])
+
+
 # ──────────────────────────────────────────────
 # API ROUTES
 # ──────────────────────────────────────────────
@@ -297,7 +338,8 @@ def api_status():
         "alerts"      : state["alerts"][:5],
         "features"    : state["last_features"],
         "history"     : {k: list(v) for k, v in history.items()},
-        "veto_active" : bool(state.get("last_veto", "")),
+        "veto_active"      : bool(state.get("last_veto", "")),
+        "last_attack_map"  : state.get("last_attack_map", []),
     })
 
 @app.route("/api/clear_alerts", methods=["POST"])
@@ -612,6 +654,95 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     font-family: var(--mono);
   }
 
+  /* ── ATT&CK PANEL ── */
+  .attack-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    grid-column: span 3;
+  }
+
+  .attack-tag {
+    display: inline-block;
+    background: rgba(248,81,73,0.12);
+    border: 1px solid rgba(248,81,73,0.3);
+    color: var(--threat);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 2px;
+    text-decoration: none;
+  }
+  .attack-tag:hover { background: rgba(248,81,73,0.25); }
+
+  .attack-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border-radius: 6px;
+    border-left: 3px solid var(--threat);
+    margin-bottom: 8px;
+  }
+
+  .attack-row-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .attack-id {
+    font-family: var(--mono);
+    font-weight: 700;
+    color: var(--threat);
+    font-size: 0.85rem;
+  }
+
+  .attack-name {
+    font-size: 0.85rem;
+    color: var(--text);
+  }
+
+  .attack-tactic {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 0.70rem;
+    color: var(--muted);
+    background: var(--border);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  .attack-evidence {
+    font-size: 0.75rem;
+    color: var(--muted);
+    padding-left: 4px;
+  }
+
+  .attack-score-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 4px;
+  }
+
+  .attack-score-fill {
+    height: 100%;
+    background: var(--threat);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
+  .alert-tags {
+    margin-top: 3px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+
   /* ── FEATURES TABLE ── */
   .features-panel {
     background: var(--surface);
@@ -691,6 +822,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="header-meta">
     <span>Samples: <span id="sample-count">0</span></span>
     <span class="uptime-badge">Uptime: <span id="uptime">0s</span></span>
+    <a href="/timeline" style="color:var(--accent);font-family:var(--mono);font-size:0.78rem;text-decoration:none;border:1px solid var(--accent);padding:3px 10px;border-radius:5px;">📅 Timeline</a>
     <span id="last-update" style="color:var(--muted)">—</span>
   </div>
 </header>
@@ -782,6 +914,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="chart-panel">
     <div class="panel-title">Network Traffic — KB/s</div>
     <canvas id="net-chart"></canvas>
+  </div>
+
+  <!-- ATT&CK PANEL -->
+  <div class="attack-panel">
+    <div class="panel-title">MITRE ATT&amp;CK Mapping</div>
+    <div id="attack-content">
+      <div class="no-alerts" style="padding:10px 0">
+        No threat detected — ATT&amp;CK techniques will appear here on detection
+      </div>
+    </div>
   </div>
 
 </div>
@@ -928,10 +1070,44 @@ async function poll() {
     if (data.alerts.length === 0) {
       alertList.innerHTML = '<div class="no-alerts">No alerts yet</div>';
     } else {
-      alertList.innerHTML = data.alerts.map(a => `
-        <div class="alert-item ${a.type}">
-          <div class="alert-time">${a.time}</div>
-          <div>${a.message}</div>
+      alertList.innerHTML = data.alerts.map(a => {
+        const tags = a.attack_tags
+          ? `<div class="alert-tags">${
+              a.attack_tags.split(' | ').map(t =>
+                `<span class="attack-tag">${t}</span>`
+              ).join('')
+            }</div>`
+          : '';
+        return `
+          <div class="alert-item ${a.type}">
+            <div class="alert-time">${a.time}</div>
+            <div>
+              <div>${a.message}</div>
+              ${tags}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ATT&CK Panel
+    const attackContent = document.getElementById('attack-content');
+    const attackMap     = data.last_attack_map || [];
+    if (attackMap.length === 0) {
+      attackContent.innerHTML = '<div class="no-alerts" style="padding:10px 0">No threat detected — ATT&CK techniques will appear here on detection</div>';
+    } else {
+      attackContent.innerHTML = attackMap.map(t => `
+        <div class="attack-row">
+          <div class="attack-row-header">
+            <span class="attack-id">${t.id}</span>
+            <span class="attack-name">${t.name}</span>
+            <span class="attack-tactic">${t.tactic}</span>
+            <a href="${t.url}" target="_blank" style="color:var(--accent);font-size:0.72rem;font-family:var(--mono);margin-left:6px">↗ ATT&CK</a>
+          </div>
+          <div class="attack-evidence">${t.evidence.slice(0,2).map(e => `• ${e}`).join('<br>')}</div>
+          <div class="attack-score-bar">
+            <div class="attack-score-fill" style="width:${Math.min(t.score,100)}%"></div>
+          </div>
         </div>
       `).join('');
     }
