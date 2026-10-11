@@ -565,7 +565,7 @@ setInterval(fetchData, 3000);
 </html>"""
 
 
-def register_timeline(app, state_ref, history_ref, alert_log_ref):
+def register_timeline(app, state_ref, history_ref, state_full_ref):
     """
     Register timeline blueprint + API route on the Flask app.
     Call this from dashboard.py after creating the app.
@@ -577,7 +577,7 @@ def register_timeline(app, state_ref, history_ref, alert_log_ref):
 
     @app.route("/api/timeline")
     def api_timeline():
-        alerts = alert_log_ref
+        alerts = state_full_ref.get("alerts", [])
 
         # Enrich alerts with duration
         enriched = []
