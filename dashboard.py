@@ -50,6 +50,17 @@ from collections import deque
 from datetime import datetime
 import os
 
+try:
+    from network_detector import NetworkDetector
+    net_detector = NetworkDetector(interface=None)
+    net_detector.start()
+    NETDET_AVAILABLE = True
+    print("[+] Network detector started")
+except Exception as e:
+    NETDET_AVAILABLE = False
+    net_detector = None
+    print(f"[!] Network detector unavailable: {e}")
+
 MODEL_PATH       = "cryptojacking_model.pkl"
 SCALER_PATH      = "scaler.pkl"
 SAMPLE_INTERVAL  = 2
@@ -217,10 +228,26 @@ def detection_loop():
             elif not veto_triggered:
                 state["last_veto"] = ""
 
+            # ── NETWORK LAYER ──────────────────────────────────────
+            net_threat = "SAFE"
+            if NETDET_AVAILABLE and net_detector:
+                net_threat = net_detector.get_threat_level()
+                # Network THREAT alone → at least WARNING on dashboard
+                if net_threat == "THREAT" and prob < 0.50:
+                    net_det = net_detector.get_latest_detection()
+                    if net_det:
+                        state["alerts"].insert(0, {
+                            "time"        : datetime.now().strftime("%H:%M:%S"),
+                            "message"     : f"🌐 Network threat: {net_det['detail']}",
+                            "type"        : "threat",
+                            "attack_tags" : "T1571",
+                            "attack_detail": "",
+                        })
+
             # ── STATUS ─────────────────────────────────────────────
-            if prob >= 0.80 and not veto_triggered:
+            if (prob >= 0.80 and not veto_triggered) or net_threat == "THREAT":
                 new_status = "THREAT"
-            elif prob >= 0.50 or veto_triggered:
+            elif prob >= 0.50 or veto_triggered or net_threat == "WARNING":
                 new_status = "WARNING"
             else:
                 new_status = "SAFE"
@@ -317,6 +344,7 @@ def api_status():
         "veto_active"     : bool(state.get("last_veto", "")),
         "last_attack_map" : state.get("last_attack_map", []),
         "last_shap"       : state.get("last_shap", []),
+        "network"         : net_detector.get_status() if NETDET_AVAILABLE else {"available": False},
     })
 
 @app.route("/api/clear_alerts", methods=["POST"])
@@ -348,6 +376,10 @@ def kill_miners():
             "type"   : "threat"
         })
         state["status"] = "SAFE"
+        # Clear network threats too
+        if NETDET_AVAILABLE and net_detector:
+            net_detector.clear_threats()
+
     return jsonify({"ok": True, "killed": killed,
                     "message": f"Killed {len(killed)}" if killed else "No miners found",
                     "errors": errors})
@@ -430,6 +462,19 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .shap-dir.attack{background:rgba(248,81,73,0.15);color:var(--threat);}
   .shap-dir.safe{background:rgba(63,185,80,0.12);color:var(--safe);}
   .alert-tags{margin-top:3px;display:flex;flex-wrap:wrap;gap:3px;}
+
+  /* ── NETWORK PANEL ── */
+  .net-panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 20px;grid-column:span 3;}
+  .net-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
+  .net-stat{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+  .net-stat-label{font-family:var(--mono);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:4px;}
+  .net-stat-val{font-family:var(--mono);font-size:1.4rem;font-weight:700;}
+  .net-threat-row{display:flex;flex-direction:column;gap:4px;padding:10px 12px;background:var(--surface2);border-radius:6px;border-left:3px solid var(--threat);margin-bottom:6px;font-size:0.82rem;}
+  .net-threat-header{display:flex;align-items:center;gap:10px;}
+  .net-method{font-family:var(--mono);font-size:0.72rem;padding:2px 8px;border-radius:4px;background:rgba(248,81,73,0.15);color:var(--threat);}
+  .net-detail{color:var(--muted);font-size:0.78rem;font-family:var(--mono);}
+  .net-badge{font-family:var(--mono);font-size:0.68rem;padding:1px 6px;border-radius:3px;margin-left:auto;}
+  .net-badge.network{background:rgba(88,166,255,0.15);color:var(--accent);border:1px solid rgba(88,166,255,0.3);}
   .features-panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 20px;grid-column:span 2;}
   .feat-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;}
   .feat-row{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-radius:6px;background:var(--surface2);font-size:0.80rem;}
@@ -537,6 +582,35 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div class="panel-title">SHAP Explainability — Why This Was Flagged</div>
     <div id="shap-content"><div class="no-alerts" style="padding:10px 0">No threat detected — feature explanations will appear here on detection</div></div>
   </div>
+
+  <!-- NETWORK DETECTION PANEL -->
+  <div class="net-panel">
+    <div class="panel-title">🌐 Network-Level Detection Layer</div>
+    <div class="net-stats">
+      <div class="net-stat">
+        <div class="net-stat-label">Packets Captured</div>
+        <div class="net-stat-val" id="net-packets" style="color:var(--accent)">0</div>
+      </div>
+      <div class="net-stat">
+        <div class="net-stat-label">Mining Port Hits</div>
+        <div class="net-stat-val" id="net-porthits" style="color:var(--warn)">0</div>
+      </div>
+      <div class="net-stat">
+        <div class="net-stat-label">Stratum Detections</div>
+        <div class="net-stat-val" id="net-stratum" style="color:var(--threat)">0</div>
+      </div>
+      <div class="net-stat">
+        <div class="net-stat-label">Active Net Threats</div>
+        <div class="net-stat-val" id="net-threats" style="color:var(--threat)">0</div>
+      </div>
+    </div>
+    <div id="net-content">
+      <div class="no-alerts" style="padding:6px 0">
+        Monitoring network traffic — mining connections will appear here
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -640,6 +714,45 @@ async function poll(){
           <div class="attack-score-bar"><div class="attack-score-fill" style="width:${Math.min(t.score,100)}%"></div></div>
         </div>`).join('');
     }
+    // Network Panel
+    const net = data.network || {};
+    document.getElementById('net-packets').textContent  = net.packets_captured || 0;
+    document.getElementById('net-porthits').textContent = net.mining_port_hits  || 0;
+    document.getElementById('net-stratum').textContent  = net.stratum_hits      || 0;
+    document.getElementById('net-threats').textContent  = (net.active_threats||[]).length;
+
+    const netContent  = document.getElementById('net-content');
+    const netThreats  = net.active_threats || [];
+    const netRecent   = net.recent_detections || [];
+
+    if (netThreats.length === 0 && netRecent.length === 0) {
+      netContent.innerHTML = '<div class="no-alerts" style="padding:6px 0">Monitoring network traffic — mining connections will appear here</div>';
+    } else {
+      let html = '';
+      netThreats.forEach(t => {
+        html += `<div class="net-threat-row">
+          <div class="net-threat-header">
+            <span class="net-method">${t.method}</span>
+            <span style="font-size:0.82rem">${t.detail}</span>
+            <span class="net-badge network">NETWORK</span>
+          </div>
+          <div class="net-detail">First: ${t.first_seen} | Last: ${t.last_seen} | Packets: ${t.count}</div>
+        </div>`;
+      });
+      if (netRecent.length > 0 && netThreats.length === 0) {
+        netRecent.slice(0,3).forEach(d => {
+          html += `<div class="net-threat-row" style="border-left-color:var(--warn)">
+            <div class="net-threat-header">
+              <span class="net-method" style="background:rgba(210,153,34,0.15);color:var(--warn)">${d.method}</span>
+              <span style="font-size:0.82rem">${d.detail}</span>
+              <span class="net-badge network">${d.time}</span>
+            </div>
+          </div>`;
+        });
+      }
+      netContent.innerHTML = html;
+    }
+
   }catch(e){console.error('Poll error:',e);}
 }
 
